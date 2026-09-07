@@ -10,7 +10,12 @@ runner:
   # Number of jobs this runner executes at the same time.
   capacity: 1
   # Environment variables passed to every job.
-  envs: {}
+  # DOCKER_HOST makes each job container reach the Docker-in-Docker daemon.
+  # Without it, the docker CLI inside a job tries /var/run/docker.sock
+  # (there is no daemon there) and fails, e.g. docker/setup-buildx-action.
+  # The hostname must match the `--add-host` entry in container.options.
+  envs:
+    DOCKER_HOST: tcp://docker-in-docker.docker.internal:2375
   # Extra environment variables for jobs, from a file (optional).
   env_file: ""
   # Timeout after which a job is cancelled.
@@ -26,6 +31,9 @@ container:
   # Run each job in an isolated container inside the Docker-in-Docker daemon
   # that ships with this stack (secure: never exposes the host docker socket).
   docker_host: tcp://docker-in-docker:2375
+  # Resolve `docker-in-docker.docker.internal` (used by DOCKER_HOST above)
+  # to the DIND container address as seen from inside the job container.
+  options: '--add-host=docker-in-docker.docker.internal:host-gateway'
   # Let each job have its own temporary network (Forgejo creates these).
   network: ""
   # Required so jobs can run nested docker (docker build) inside dind.
@@ -43,7 +51,9 @@ host:
 server:
   # The Forgejo instance that this runner connects to, plus the node identity.
   # Forgejo -> Actions -> Nodes -> "Create new node" then copy the values it
-  # gives you here. These are SECRETS. Replace <instance-url> below.
+  # gives you here. These are SECRETS. Replace <instance-url> below with your
+  # Forgejo URL (e.g. https://your-instance.example.com/), and <uuid>/<token>
+  # with the node credentials shown in the Forgejo web UI.
   connections:
     forgejo:
       url: <instance-url>

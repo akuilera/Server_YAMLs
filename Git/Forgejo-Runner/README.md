@@ -52,6 +52,15 @@ Forgejo Actions is enabled by default (`[actions] ENABLED = true`), so the "Acti
 
 > If you lose the token, use **Reset registration token** on the node and copy the new value.
 
+## How job containers reach Docker (DIND)
+
+Forgejo Runner runs each job inside a job container. For workflow steps that use Docker (`docker/setup-buildx-action`, etc.) to reach the isolated DIND daemon, the runner config needs **two things** (already present in `runner-config.yml.example`):
+
+1. `runner.envs.DOCKER_HOST` — an environment variable injected into every job container so the `docker` CLI inside it knows which daemon to talk to. Its value must match the hostname set up in step 2.
+2. `container.options` — an extra `--add-host=...:host-gateway` so that hostname resolves to the DIND container address from inside the job container (each job gets its own temporary network, so it cannot rely on the compose service name).
+
+Without these, a `docker` command inside a job looks for `/var/run/docker.sock`, finds nothing, and fails with `failed to connect to the docker API at unix:///var/run/docker.sock`. That is exactly the failure seen in the `Set up Buildx` step before this was configured.
+
 ## Deploy
 
 This stack is a normal repository compose, deployed on the server via Portainer (git repository method), like the rest of the setup.
@@ -69,6 +78,12 @@ chown 1001:1001 "${PATH_TO_CONTAINERS}/Forgejo-Runner/runner"
 ```
 
 Then deploy the stack (Portainer → Stacks → Add stack → Repository → this repo, path `Git/Forgejo-Runner`).
+
+### After editing `runner-config.yml`
+
+The secrets config is mounted read-only at runtime; the container reads it **only once at startup**. So after editing `$PATH_TO_SECRETS/Forgejo-Runner/runner-config.yml`, you must restart the stack (Portainer → stack → Update, or restart the `runner` container) for the change to take effect.
+
+You do **not** need to manage the `docker-in-docker` container separately — it is part of the same stack and the compose already declares `depends_on: docker-in-docker: condition: service_started`, so updating the stack always starts DIND before the runner.
 
 ## Verify it works
 
